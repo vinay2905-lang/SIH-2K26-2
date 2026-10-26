@@ -104,6 +104,27 @@ Free-plan notes: the web service sleeps after 15 idle minutes and takes about a 
 (open the site shortly before a demo); a free database expires 30 days after creation and has
 no backups; one free database per workspace.
 
+**Created the web service by hand (New → Web Service) instead?** Then Render made no database
+and set no variables, and the log shows `DATABASE_URL is not set` (older builds: `connection to
+server at "127.0.0.1", port 5432 failed`). Either delete it and use the Blueprint, or:
+
+1. **New → Postgres** (free, same region as the web service). Copy its **Internal Database URL**.
+2. On the web service → **Environment**, add:
+
+   | Key | Value |
+   |---|---|
+   | `DATABASE_URL` | the Internal Database URL |
+   | `APP_ENV` | `production` |
+   | `DEMO_MODE` | `true` |
+   | `SEED_DEMO_DATA` | `true` |
+   | `COOKIE_SECURE` | `true` |
+   | `IDENTIFIER_HMAC_KEY` | a long random string (keep it forever) |
+   | `IDENTIFIER_ENCRYPTION_KEY` | another long random string (keep it forever) |
+
+   Generate random strings with `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
+3. **Save, rebuild, and deploy**. The log should show the migration, `Loaded synthetic demo
+   data`, then `Uvicorn running on http://0.0.0.0:10000`.
+
 To reset the hosted demo data, run the seed locally against the database's **External Database
 URL** (Render → database → Connect):
 
