@@ -32,7 +32,7 @@ def test_demo_upload_end_to_end(as_user, db):
     assert batch["status"] == "partial"
     assert batch["rejected_rows"] == 6
     assert batch["created_rows"] == batch["total_rows"] - 6
-    assert batch["findings_opened"] >= 5
+    assert batch["findings_opened"] == 5  # exactly the planted problems, no false positives
 
     rows = c.get(
         f"/api/v1/uploads/{batch['id']}/rows", params={"status": "rejected", "page_size": 100}
@@ -53,7 +53,7 @@ def test_demo_upload_end_to_end(as_user, db):
             select(Finding).where(Finding.source_batch_id == uuid.UUID(batch["id"]))
         )
     }
-    assert set(findings) >= {
+    assert set(findings) == {
         "INTAKE_EXCEEDED",
         "CROSS_INSTITUTION_DUPLICATE",
         "CATEGORY_CONFLICT",
@@ -68,6 +68,12 @@ def test_demo_upload_end_to_end(as_user, db):
         select(Finding).where(Finding.rule_code == "CROSS_INSTITUTION_DUPLICATE")
     ).all()
     assert {f.institution.code for f in cross} == {"DEMO-INST-001", "DEMO-INST-003"}
+    # The batch counts and links only the uploading institution's own findings.
+    own = db.scalars(select(Finding).where(Finding.source_batch_id == uuid.UUID(batch["id"]))).all()
+    assert batch["findings_opened"] == len(own)
+    assert {f.institution.code for f in own} == {"DEMO-INST-001"}
+    other_side = next(f for f in cross if f.institution.code == "DEMO-INST-003")
+    assert other_side.source_batch_id is None
     aranya_cross = next(f for f in cross if f.institution.code == "DEMO-INST-001")
     detail = c.get(f"/api/v1/findings/{aranya_cross.id}").json()
     assert detail["restricted_evidence"] is None and detail["restricted_evidence_hidden"]

@@ -99,8 +99,10 @@ def process_upload(
         today=today,
     )
     db.flush()
+    importer.prefetch(row.values for row in parsed.rows if not row.errors)
 
     counts = {"created": 0, "updated": 0, "unchanged": 0, "rejected": 0}
+    row_results: list[UploadRowResult] = []
     for row in parsed.rows:
         if row.errors:
             result_status, errors, student, admission = "rejected", row.errors, None, None
@@ -110,7 +112,7 @@ def process_upload(
             student, admission = result.student, result.admission
         counts[result_status] += 1
         label = (row.values.get("institution_student_id") or "").strip()[:64] or None
-        db.add(
+        row_results.append(
             UploadRowResult(
                 batch_id=batch.id,
                 row_number=row.line_number,
@@ -121,6 +123,9 @@ def process_upload(
                 admission_id=admission.id if admission else None,
             )
         )
+    # Students and admissions first: row results reference them by foreign key.
+    db.flush()
+    db.add_all(row_results)
 
     accepted = counts["created"] + counts["updated"] + counts["unchanged"]
     batch.total_rows = len(parsed.rows)
@@ -132,8 +137,15 @@ def process_upload(
     db.flush()
 
     if accepted:
-        stats = run_validation(db, [institution.id], batch_id=batch.id, policy=policy)
-        batch.findings_opened = stats.opened
+        stats = run_validation(
+            db,
+            [institution.id],
+            batch_id=batch.id,
+            batch_institution_id=institution.id,
+            policy=policy,
+        )
+        # Count only this institution's findings; others' are not theirs to see.
+        batch.findings_opened = stats.opened_by_institution.get(institution.id, 0)
 
     batch.completed_at = utcnow()
     batch.processing_ms = int((time.perf_counter() - started) * 1000)

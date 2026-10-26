@@ -467,6 +467,7 @@ def submit_student_record(
             [e.as_dict() for e in result.errors],
         )
     assert result.student is not None and result.admission is not None
+    db.flush()
     run_validation(db, [institution.id], policy=policy)
     audit.record(
         db,

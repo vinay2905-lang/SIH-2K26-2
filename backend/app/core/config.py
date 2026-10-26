@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Fixed development-only keys so a fresh checkout runs without setup.
@@ -34,6 +34,16 @@ class Settings(BaseSettings):
     login_window_seconds: int = Field(default=900, ge=10)
 
     frontend_dist_dir: str = "../frontend/dist"
+
+    @field_validator("identifier_hmac_key", "identifier_encryption_key", mode="before")
+    @classmethod
+    def _blank_means_default(cls, value: object, info: ValidationInfo) -> object:
+        # Docker Compose passes unset variables as empty strings.
+        if value in (None, ""):
+            if info.field_name == "identifier_hmac_key":
+                return DEV_IDENTIFIER_HMAC_KEY
+            return DEV_IDENTIFIER_ENCRYPTION_KEY
+        return value
 
     @model_validator(mode="after")
     def _refuse_dev_keys_in_production(self) -> "Settings":

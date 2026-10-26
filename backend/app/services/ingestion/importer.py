@@ -12,15 +12,18 @@ Matching policy (documented in docs/csv-import.md):
 """
 
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.identifiers import encrypt_identifier, fingerprint, last4
+from app.core.identifiers import encrypt_identifier, fingerprint, last4, normalize_identifier
 from app.models import Admission, Institution, Programme, Student
 from app.services.ingestion.schema import RowError, StudentRecordInput, validate_record
+
+_CHUNK = 500
 
 ADMISSION_FIELDS = (
     "admission_date",
@@ -83,10 +86,68 @@ class RecordImporter:
         }
         self._students_by_fp: dict[str, Student | None] = {}
         self._students_by_sid: dict[str, Student | None] = {}
+        self._admissions: dict[tuple[uuid.UUID, uuid.UUID, str], Admission | None] = {}
+        self._admissions_loaded: set[uuid.UUID] = set()
         # Within-file tracking: admission key -> first line, fingerprint -> first record.
         self._seen_admissions: dict[tuple[str, str, str], int] = {}
         self._seen_identity: dict[str, tuple[int, StudentRecordInput]] = {}
         self._seen_student_ids: dict[str, tuple[int, str]] = {}
+
+    def prefetch(self, rows: Iterable[dict[str, str]]) -> None:
+        """Load every existing student and admission the batch can touch in a few queries,
+        instead of several queries per row."""
+        fingerprints, student_ids = set(), set()
+        for raw in rows:
+            identifier = normalize_identifier(raw.get("apaar_id"))
+            if identifier:
+                fingerprints.add(fingerprint(identifier))
+            sid = (raw.get("institution_student_id") or "").strip()
+            if sid:
+                student_ids.add(sid)
+        found: dict[uuid.UUID, Student] = {}
+        for column, values in (
+            (Student.apaar_fingerprint, sorted(fingerprints)),
+            (Student.institution_student_id, sorted(student_ids)),
+        ):
+            for start in range(0, len(values), _CHUNK):
+                for student in self.db.scalars(
+                    select(Student).where(
+                        Student.institution_id == self.institution.id,
+                        column.in_(values[start : start + _CHUNK]),
+                    )
+                ):
+                    found[student.id] = student
+        for fp in fingerprints:
+            self._students_by_fp.setdefault(fp, None)
+        for sid in student_ids:
+            self._students_by_sid.setdefault(sid, None)
+        for student in found.values():
+            self._students_by_fp[student.apaar_fingerprint] = student
+            self._students_by_sid[student.institution_student_id] = student
+
+        ids = sorted(found, key=str)
+        for start in range(0, len(ids), _CHUNK):
+            chunk = ids[start : start + _CHUNK]
+            for admission in self.db.scalars(
+                select(Admission).where(Admission.student_id.in_(chunk))
+            ):
+                key = (admission.student_id, admission.programme_id, admission.academic_year)
+                self._admissions[key] = admission
+            self._admissions_loaded.update(chunk)
+
+    def _admission(
+        self, student_id: uuid.UUID, programme_id: uuid.UUID, academic_year: str
+    ) -> Admission | None:
+        key = (student_id, programme_id, academic_year)
+        if key not in self._admissions and student_id not in self._admissions_loaded:
+            self._admissions[key] = self.db.scalar(
+                select(Admission).where(
+                    Admission.student_id == student_id,
+                    Admission.programme_id == programme_id,
+                    Admission.academic_year == academic_year,
+                )
+            )
+        return self._admissions.get(key)
 
     def _student_by_fp(self, fp: str) -> Student | None:
         if fp not in self._students_by_fp:
@@ -241,15 +302,10 @@ class RecordImporter:
             self.db.add(student)
             self._students_by_fp[fp] = student
             self._students_by_sid[record.institution_student_id] = student
+            self._admissions_loaded.add(student.id)  # a new student has no stored admissions
             admission = None
         else:
-            admission = self.db.scalar(
-                select(Admission).where(
-                    Admission.student_id == student.id,
-                    Admission.programme_id == programme.id,
-                    Admission.academic_year == record.academic_year,
-                )
-            )
+            admission = self._admission(student.id, programme.id, record.academic_year)
 
         values = {name: getattr(record, name) for name in ADMISSION_FIELDS}
         if admission is None:
@@ -263,7 +319,7 @@ class RecordImporter:
                 **values,
             )
             self.db.add(admission)
-            self.db.flush()
+            self._admissions[(student.id, programme.id, record.academic_year)] = admission
             return ApplyResult("created", student=student, admission=admission)
 
         changed = [name for name, value in values.items() if getattr(admission, name) != value]
@@ -273,5 +329,4 @@ class RecordImporter:
             setattr(admission, name, values[name])
         admission.source_batch_id = self.batch_id or admission.source_batch_id
         student.updated_by_id = self.actor_id
-        self.db.flush()
         return ApplyResult("updated", student=student, admission=admission, changed_fields=changed)

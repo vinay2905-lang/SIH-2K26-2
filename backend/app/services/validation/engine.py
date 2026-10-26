@@ -11,7 +11,7 @@ import hashlib
 import json
 import uuid
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
@@ -32,6 +32,7 @@ from app.services.validation.rules import (
 @dataclass
 class ReconcileStats:
     opened: int = 0
+    opened_by_institution: dict[uuid.UUID, int] = field(default_factory=dict)
     refreshed: int = 0
     unchanged: int = 0
     auto_resolved: int = 0
@@ -54,8 +55,12 @@ def run_validation(
     institution_ids: Iterable[uuid.UUID],
     *,
     batch_id: uuid.UUID | None = None,
+    batch_institution_id: uuid.UUID | None = None,
     policy: PolicySettings | None = None,
 ) -> ReconcileStats:
+    """Re-run every enabled rule for ``institution_ids`` (plus the global cross-institution
+    rule). ``batch_id`` is recorded as the source only on findings of the batch's own
+    institution, so a finding never points at another institution's upload."""
     policy = policy or load_policy(db)
     enabled = enabled_rule_codes(policy)
     institution_ids = list(dict.fromkeys(institution_ids))
@@ -149,7 +154,7 @@ def run_validation(
             admission_id=draft.admission_id,
             programme_id=draft.programme_id,
             academic_year=draft.academic_year,
-            source_batch_id=batch_id,
+            source_batch_id=batch_id if draft.institution_id == batch_institution_id else None,
         )
         db.add(finding)
         db.add(
@@ -161,6 +166,9 @@ def run_validation(
             )
         )
         stats.opened += 1
+        stats.opened_by_institution[draft.institution_id] = (
+            stats.opened_by_institution.get(draft.institution_id, 0) + 1
+        )
 
     for key, finding in active.items():
         if key in drafts:

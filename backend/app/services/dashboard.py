@@ -310,6 +310,7 @@ def central_dashboard(db: Session, policy: PolicySettings, academic_year: str) -
                 "institution_type": inst.institution_type,
                 "active_enrolments": summary["active_enrolments"],
                 "approved_intake": summary["approved_intake"],
+                "regular_enrolled": summary["regular_enrolled"],
                 "utilisation_pct": summary["utilisation_pct"],
                 "programmes_over_intake": summary["programmes_over_intake"],
                 "open_findings": findings["by_institution"].get(inst.id, 0),
