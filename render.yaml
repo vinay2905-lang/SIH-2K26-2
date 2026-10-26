@@ -1,0 +1,33 @@
+# Render Blueprint: one Docker web service (API + built UI) and a PostgreSQL database.
+# Render dashboard → New → Blueprint → select this repository → Apply.
+# Free instances sleep after 15 idle minutes; free databases expire after 30 days.
+services:
+  - type: web
+    name: apaar-platform
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: APP_ENV
+        value: production          # enforces real keys and secure cookies
+      - key: DEMO_MODE
+        value: "true"              # demo accounts on the login page + demo sample file
+      - key: SEED_DEMO_DATA
+        value: "true"              # load synthetic data on first start (skipped if data exists)
+      - key: COOKIE_SECURE
+        value: "true"              # Render serves over HTTPS
+      - key: DATABASE_URL
+        fromDatabase:
+          name: apaar-db
+          property: connectionString
+      - key: IDENTIFIER_HMAC_KEY
+        generateValue: true        # generated once by Render; keep it stable
+      - key: IDENTIFIER_ENCRYPTION_KEY
+        generateValue: true
+
+databases:
+  - name: apaar-db
+    plan: free
+    databaseName: apaar
+    user: apaar

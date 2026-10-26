@@ -26,7 +26,7 @@ ROLE_DESCRIPTIONS = {
 
 
 def _demo_mode() -> bool:
-    return get_settings().app_env != "production"
+    return get_settings().is_demo
 
 
 @router.get("/meta/public")

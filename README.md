@@ -49,11 +49,11 @@ The official requirements are traced to code and tests in
 ### Option A — Docker Compose (one command for the whole stack)
 
 ```bash
-docker compose up --build -d
-docker compose exec app python -m app.seed      # load synthetic demo data
+docker compose up --build -d                    # first start also loads synthetic demo data
 ```
 
-Open <http://localhost:8000>. API docs: <http://localhost:8000/api/docs>.
+Open <http://localhost:8000>. API docs: <http://localhost:8000/api/docs>. To reset the demo data
+later: `docker compose exec app python -m app.seed --reset`.
 
 ### Option B — Local development
 
@@ -82,6 +82,37 @@ npm run dev
 Configuration lives in environment variables — see [`.env.example`](.env.example). In
 development the app uses built-in, public identifier keys and warns about it; with
 `APP_ENV=production` it refuses to start without real keys and secure cookies.
+
+## Deploy to Render
+
+The repository includes a [`render.yaml`](render.yaml) Blueprint: one Docker web service (API +
+UI on one HTTPS origin) and a PostgreSQL database.
+
+1. Push this repository to GitHub (already done if you are reading it there).
+2. In the [Render dashboard](https://dashboard.render.com) choose **New → Blueprint**, connect
+   the repository, pick the branch, and click **Apply**.
+3. Wait for the first build (a few minutes). On first start the container runs the migration
+   and loads the synthetic demo data; later deploys keep existing data.
+4. Open `https://<your-service>.onrender.com` and sign in with a demo account.
+
+What the Blueprint sets: `APP_ENV=production` (refuses insecure settings), `DEMO_MODE=true`
+(demo accounts and sample file), `SEED_DEMO_DATA=true`, `COOKIE_SECURE=true`, `DATABASE_URL`
+from the database, and two identifier keys generated once by Render. Do **not** regenerate the
+keys after data exists — encrypted identifiers would no longer decrypt.
+
+Free-plan notes: the web service sleeps after 15 idle minutes and takes about a minute to wake
+(open the site shortly before a demo); a free database expires 30 days after creation and has
+no backups; one free database per workspace.
+
+To reset the hosted demo data, run the seed locally against the database's **External Database
+URL** (Render → database → Connect):
+
+```bash
+cd backend && DATABASE_URL='<external database URL>' python -m app.seed --reset
+```
+
+For a long-running or real deployment, use paid plans, keep `DEMO_MODE` off, and manage the
+identifier keys in a secret store.
 
 ## Demo accounts
 
@@ -127,7 +158,7 @@ sample-data/           CSV template and a malformed example
 ## Testing
 
 ```bash
-cd backend && pytest                                   # 133 tests on SQLite
+cd backend && pytest                                   # 142 tests on SQLite
 TEST_DATABASE_URL=postgresql+psycopg://USER:PASS@localhost:5432/apaar_test pytest   # on PostgreSQL
 ruff check . && ruff format --check .
 

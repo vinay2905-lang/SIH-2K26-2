@@ -15,11 +15,12 @@ WORKDIR /app/backend
 COPY backend/pyproject.toml ./
 COPY backend/app ./app
 RUN pip install --no-cache-dir .
-COPY backend/alembic.ini ./
+COPY backend/alembic.ini backend/start.sh ./
 COPY backend/alembic ./alembic
 COPY --from=frontend /build/dist /app/frontend/dist
 RUN useradd --create-home --uid 10001 appuser
 USER appuser
 EXPOSE 8000
-# Apply migrations, then serve. Seeding is a separate, explicit step (see README).
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# Migrates, seeds demo data only if SEED_DEMO_DATA=true and the database is empty, then serves
+# on $PORT (default 8000).
+CMD ["sh", "./start.sh"]

@@ -872,15 +872,24 @@ def demo_upload_rows(db: Session, institution: Institution, today: date | None =
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Load synthetic demo data")
-    parser.add_argument("--reset", action="store_true", help="wipe all data first")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--reset", action="store_true", help="wipe all data first")
+    group.add_argument(
+        "--if-empty",
+        action="store_true",
+        help="seed only if the database has no data (for startup)",
+    )
     args = parser.parse_args()
-    if get_settings().app_env == "production":
-        sys.exit("Refusing to seed demo data when APP_ENV=production")
+    if not get_settings().is_demo:
+        sys.exit("Refusing to seed demo data: demo mode is off (set DEMO_MODE=true to allow)")
 
     from app.db.session import SessionLocal
 
     with SessionLocal() as db:
         if db.scalar(select(Institution.id).limit(1)) is not None:
+            if args.if_empty:
+                print("Database already has data; skipping demo seed.")
+                return
             if not args.reset:
                 sys.exit("Database already has data. Re-run with --reset to wipe and reseed.")
             _wipe(db)

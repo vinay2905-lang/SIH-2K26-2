@@ -35,6 +35,21 @@ class Settings(BaseSettings):
 
     frontend_dist_dir: str = "../frontend/dist"
 
+    # Demo conveniences (demo accounts on the login page, demo sample file, seeding).
+    # Unset: on everywhere except production. A hosted demo sets APP_ENV=production for the
+    # hardening (real keys, secure cookies) and DEMO_MODE=true for the demo features.
+    demo_mode: bool | None = None
+
+    @field_validator("database_url")
+    @classmethod
+    def _sqlalchemy_postgres_scheme(cls, value: str) -> str:
+        # Hosting providers (e.g. Render, Heroku) hand out postgres:// URLs; SQLAlchemy needs
+        # an explicit dialect and driver.
+        for prefix in ("postgres://", "postgresql://"):
+            if value.startswith(prefix):
+                return "postgresql+psycopg://" + value[len(prefix) :]
+        return value
+
     @field_validator("identifier_hmac_key", "identifier_encryption_key", mode="before")
     @classmethod
     def _blank_means_default(cls, value: object, info: ValidationInfo) -> object:
@@ -55,6 +70,10 @@ class Settings(BaseSettings):
             if not self.cookie_secure:
                 raise ValueError("COOKIE_SECURE must be true in production")
         return self
+
+    @property
+    def is_demo(self) -> bool:
+        return self.demo_mode if self.demo_mode is not None else self.app_env != "production"
 
     @property
     def using_dev_keys(self) -> bool:

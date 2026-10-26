@@ -44,7 +44,7 @@ def config(principal: Principal = Depends(get_principal), db: Session = Depends(
         "counted_statuses": policy.intake_policy.count_statuses,
         "academic_years": available_academic_years(db),
         "verification_provider": {"name": provider.display_name, "simulated": provider.simulated},
-        "demo_mode": settings.app_env != "production",
+        "demo_mode": settings.is_demo,
         "upload_limits": {
             "max_bytes": settings.upload_max_bytes,
             "max_rows": settings.upload_max_rows,

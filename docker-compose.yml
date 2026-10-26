@@ -1,6 +1,6 @@
 # Local demo stack: PostgreSQL + the app (API and built UI on http://localhost:8000).
-#   docker compose up --build -d
-#   docker compose exec app python -m app.seed --reset     # load synthetic demo data
+#   docker compose up --build -d                            # first start loads demo data
+#   docker compose exec app python -m app.seed --reset     # wipe and reload demo data
 services:
   db:
     image: postgres:16-alpine
@@ -25,6 +25,7 @@ services:
         condition: service_healthy
     environment:
       APP_ENV: ${APP_ENV:-development}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
       DATABASE_URL: postgresql+psycopg://apaar:${POSTGRES_PASSWORD:-apaar_dev_password}@db:5432/apaar
       IDENTIFIER_HMAC_KEY: ${IDENTIFIER_HMAC_KEY:-}
       IDENTIFIER_ENCRYPTION_KEY: ${IDENTIFIER_ENCRYPTION_KEY:-}

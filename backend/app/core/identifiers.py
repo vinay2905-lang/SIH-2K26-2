@@ -13,12 +13,15 @@ Keys come from the environment. Rotating the HMAC key invalidates existing finge
 needs a re-keying migration; this is documented in docs/security-model.md.
 """
 
+import base64
 import hashlib
 import hmac
 import re
 from functools import lru_cache
 
 from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from app.core.config import get_settings
 
@@ -39,7 +42,15 @@ def fingerprint(normalized: str) -> str:
 
 @lru_cache
 def _fernet(key: str) -> Fernet:
-    return Fernet(key.encode("utf-8"))
+    """Use the key directly if it is a Fernet key; otherwise derive one from the secret with
+    HKDF-SHA256, so a platform-generated random secret of any encoding works."""
+    try:
+        return Fernet(key.encode("utf-8"))
+    except ValueError:
+        derived = HKDF(
+            algorithm=hashes.SHA256(), length=32, salt=None, info=b"apaar-identifier-encryption"
+        ).derive(key.encode("utf-8"))
+        return Fernet(base64.urlsafe_b64encode(derived))
 
 
 def encrypt_identifier(normalized: str) -> str:

@@ -72,6 +72,14 @@ In development, built-in **public** dev keys are used so a fresh checkout runs w
 the app logs a warning. With `APP_ENV=production` the app refuses to start on dev keys or
 without `COOKIE_SECURE=true`. Real deployments should hold keys in a managed secret store.
 
+`IDENTIFIER_ENCRYPTION_KEY` may be a Fernet key or any long random secret; a non-Fernet value is
+turned into a Fernet key with HKDF-SHA256 (from the `cryptography` library). This lets hosting
+platforms generate the secret (the Render Blueprint does).
+
+`DEMO_MODE` controls demo conveniences only (demo accounts listed on the login page, the demo
+sample file, seeding). It defaults to off in production; a hosted demo enables it explicitly
+while keeping every production safeguard.
+
 ## Known limitations
 
 - The login limiter is per process; multiple instances need a shared store.

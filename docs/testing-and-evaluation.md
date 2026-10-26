@@ -8,8 +8,8 @@ Re-run the commands to reproduce them; numbers will differ on other hardware.
 
 | Suite | Command | Result |
 |---|---|---|
-| Backend unit + integration (SQLite) | `cd backend && pytest` | 133 passed |
-| Backend unit + integration (PostgreSQL) | `TEST_DATABASE_URL=postgresql+psycopg://…/apaar_test pytest` | 133 passed |
+| Backend unit + integration (SQLite) | `cd backend && pytest` | 142 passed |
+| Backend unit + integration (PostgreSQL) | `TEST_DATABASE_URL=postgresql+psycopg://…/apaar_test pytest` | 142 passed |
 | Backend lint/format | `ruff check . && ruff format --check .` | clean |
 | Frontend unit/component | `cd frontend && npm test` | 13 passed |
 | Frontend lint + typecheck + build | `npm run lint && npm run typecheck && npm run build` | clean |
@@ -31,6 +31,7 @@ the real Alembic migration), so tests are isolated and order-independent.
 | Privacy | No APAAR identifier pattern in error reports, audit details, batch metadata, list or detail responses; ciphertext and fingerprints only at rest |
 | Verification | Consent gating; withdrawal stops disclosure; format failure skips provider; simulated label on every provider result; reference valid → changed → superseded → not found |
 | Reports & dashboards | Dashboard counts equal database queries; CSV equals JSON totals; central dashboard reconciles with the report; institution scoping of reports |
+| Deployment | `postgres://` URL normalisation; demo mode independent of production hardening; any secret usable as encryption key; seed skips existing data on restart |
 | Settings & migrations | Invalid regex rejected; disabled rules leave findings; stricter thresholds raise findings; identifier format applies to new records; migration upgrade/check/downgrade with no model drift |
 
 ## Rule correctness on the labelled demo fixture
