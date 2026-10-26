@@ -1,0 +1,35 @@
+# Local demo stack: PostgreSQL + the app (API and built UI on http://localhost:8000).
+#   docker compose up --build -d
+#   docker compose exec app python -m app.seed --reset     # load synthetic demo data
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: apaar
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-apaar_dev_password}
+      POSTGRES_DB: apaar
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U apaar -d apaar"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DATABASE_URL: postgresql+psycopg://apaar:${POSTGRES_PASSWORD:-apaar_dev_password}@db:5432/apaar
+      IDENTIFIER_HMAC_KEY: ${IDENTIFIER_HMAC_KEY:-}
+      IDENTIFIER_ENCRYPTION_KEY: ${IDENTIFIER_ENCRYPTION_KEY:-}
+    ports:
+      - "8000:8000"
+
+volumes:
+  pgdata:

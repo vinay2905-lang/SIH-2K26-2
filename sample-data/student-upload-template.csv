@@ -1,0 +1,2 @@
+institution_code,programme_code,academic_year,institution_student_id,apaar_id,full_name,date_of_birth,gender,admission_date,seat_type,nri_category,oci_status,foreign_national_status,nationality,enrolment_status
+DEMO-INST-001,BTECH-CSE,2025-26,AIT25CSE001,DEMO-APAAR-000123,Aarav Sharma,2007-03-14,M,2025-08-01,REGULAR,N,N,N,IN,ENROLLED
